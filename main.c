@@ -6,6 +6,8 @@
 
 #include "include/token.h"
 
+#include "include/table.h"
+
 Test(parsing, basic_select) {
     char* test = "select * from users;";
     arr_tokens result = parser(test);
@@ -124,10 +126,36 @@ Test(parsing, only_whitespace) {
     // No cleanup needed for empty result
 }
 
+Test(getting_expression,init){
+    Table* ans = init_table(2,"%d","ID","%s","Name");
+    cr_expect_str_eq(ans->expression[0].items, "%d");
+    cr_expect_str_eq(ans->attributes[0].items, "ID");
+    cr_expect_str_eq(ans->expression[1].items, "%s");
+    cr_expect_str_eq(ans->attributes[1].items, "Name");
+    cr_expect_eq(ans->num_attri, 2);
+    kill_table(ans);
+}
+Test(getting_expression, multiple_pairs){
+    Table* ans = init_table(3,
+                            "%d", "ID",
+                            "%s", "Name",
+                            "%f", "Balance");
+    cr_assert_not_null(ans);
+    cr_expect_str_eq(ans->expression[0].items, "%d");
+    cr_expect_str_eq(ans->attributes[0].items, "ID");
+    cr_expect_str_eq(ans->expression[1].items, "%s");
+    cr_expect_str_eq(ans->attributes[1].items, "Name");
+    cr_expect_str_eq(ans->expression[2].items, "%f");
+    cr_expect_str_eq(ans->attributes[2].items, "Balance");
+    cr_expect_eq(ans->num_attri, 3);
+    kill_table(ans);
+}
+
 #if 1
 
 int main(void){
     db_interactive();
+    printf("session is over\n");
     return 0;
 }
 

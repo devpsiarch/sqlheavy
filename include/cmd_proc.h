@@ -54,7 +54,16 @@ QueryResult vm_execute_query(String*str){
         printf("it is insert command\n");
         break;
     case SELECT:
-        printf("it is select command\n");
+        // we expect (select , id , from , table, ;)
+        if(tokens.items[2].type != FROM){
+            printf("Invalid syntax , missing \"from\" in col %zu\n",tokens.items[2].col);
+            return_defer(QUERY_FAIL);
+        }
+        if(tokens.items[3].type != ID){
+            printf("Invalid syntax , missing table name in col %zu\n",tokens.items[3].col);
+            return_defer(QUERY_FAIL);
+        }
+        // look up if this table exists
         break;
     default:
         return_defer(QUERY_FAIL);

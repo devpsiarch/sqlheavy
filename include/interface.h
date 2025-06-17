@@ -8,6 +8,7 @@
 
 #include "tool.h"
 #include "cmd_proc.h"
+#include "table.h"
 
 #define PRINT_PROMPT() printf("db => ");
 
@@ -48,8 +49,10 @@ bool db_interactive(void);
 
 /*
  * table_schema {
+ *      string* name_of_table ; // used for fetching the table (should be a map for const time)
  *      string* expression;
  *      string* names;
+ *      Pager *pager;
  *      this only contains strings that can be interprited 
  *      by the sscanf 
  *      for examples a user table_schema would look like
@@ -77,6 +80,10 @@ bool db_interactive(void);
  *              }
  *          }
  *      }
+ *  }
+ *  
+ *  Page {
+ *    row arr_rows[num_max]; 
  *  }
  *
  * */
@@ -115,6 +122,10 @@ bool read_input(String*str){
 }
 
 bool db_interactive(void){
+    Table* only_table = init_table(3,
+                            "%d", "ID",
+                            "%s", "Name",
+                            "%f", "Balance");
     bool result = true;
     String command = {
         // getline allocates and resises auto
@@ -159,6 +170,7 @@ bool db_interactive(void){
     }
 defer:
     da_free(&command);
+    kill_table(only_table);
     return result;
 }
 #endif
