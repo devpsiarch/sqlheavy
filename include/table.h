@@ -52,7 +52,7 @@ void kill_row(Row*r);
 // give it values it gives back a representaion of a row
 void serilize_row(Row*dst,String*expression,const unsigned int count,...);
 // give it a row representaion and pointer to datamemebers and it will fill them out for you
-void deserilize_row(Row*src,String*expression,const unsigned int count,...);
+void deserilize_row(const Row*src,String*expression,const unsigned int count,...);
 
 Table* init_table(const unsigned int count,...);
 void kill_table(Table*t);
@@ -241,11 +241,15 @@ void serilize_row(Row*dst,String*expression,const unsigned int count,...){
                 break;
             }
             default:
+                fprintf(stderr,"type/attribute %c not yet implimented.\n",expression[i].items[1]);
+                exit(1);
                 break;
         }        
     }
+    va_end(args);
     return;
 fail:
+    va_end(args);
     if(not_matching_size) fprintf(stderr,"Not matching sized when serilizing a row.\n");
     if(wrong_format_expression) fprintf(stderr,"wrong format expression.\n");
     if(exceeded_max_str_size) fprintf(stderr, "exceeded the maximum size for a string.\n");
@@ -254,8 +258,54 @@ fail:
 
 // we pass a Row as src and pass somepointers to extract the data to those pointers 
 // WARNING: be sure to pass a correct arguments.
-void deserilize_row(Row*src,String*expression,const unsigned int count,...){
-
+// This function shall not alter the state of the Row*src
+void deserilize_row(const Row*src,String*expression,const unsigned int count,...){
+    bool wrong_format_expression = false;
+    va_list args;
+    va_start(args,count);
+    size_t indexer = 0;     // this will tell us where we start reading/copying from the row
+    for(unsigned int i = 0 ; i < count ; i++){
+        if(expression[i].items[0] != '%'){
+            wrong_format_expression = true;
+            goto fail;
+        }
+        switch(expression[i].items[1]){
+            case 'd': {
+                int* ref = va_arg(args,int*);
+                memcpy(ref,src->data+indexer,sizeof(int));
+                indexer += sizeof(int);
+                break;
+            }
+            case 'f': {
+                float* ref = va_arg(args,float*);
+                memcpy(ref,src->data+indexer,sizeof(float));
+                indexer += sizeof(float);
+                break;
+            }
+            case 'c': {
+                char* ref = va_arg(args,char*);
+                memcpy(ref,src->data+indexer,sizeof(char));
+                indexer += sizeof(char);
+                break;
+            }
+            case 's': {
+                char* ref = va_arg(args,char*);
+                memcpy(ref,src->data+indexer,MAX_SIZE_STR);
+                indexer += MAX_SIZE_STR;
+                break;
+            }
+            default:
+                fprintf(stderr,"type/attribute \"%c\" not yet implimented.\n",expression[i].items[1]);
+                exit(1);
+                break;
+        }
+    }
+    va_end(args);
+    return;
+fail:
+    va_end(args);
+    if(wrong_format_expression) fprintf(stderr,"wrong format expression.\n");
+    exit(1);
 }
 
 #endif

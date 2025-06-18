@@ -281,6 +281,50 @@ Test(serilize, custom_schema) {
     printf("Passed the second serilize function test\n");
 }
 
+Test(dessirilize,init){
+    Table* tbl = init_table(4,
+                            "%c", "Grade",
+                            "%d", "Count",
+                            "%s", "Label",
+                            "%f", "Ratio");
+    cr_assert_not_null(tbl);
+    cr_expect_eq(tbl->num_attri, 4);
+
+    /* 2) Allocate a Row buffer for that schema */
+    Row* row = init_row(tbl->expression, tbl->num_attri);
+    cr_assert_not_null(row);
+
+    /* 3) Serialize one tuple: ('B', 256, "Payload", 3.1415f) */
+    serilize_row(row,
+                 tbl->expression,
+                 tbl->num_attri,
+                 'B',                    /* char → promoted to int */
+                 256,                    /* int */
+                 "Payload",  /* string + max size */
+                 3.1415);                /* float → promoted to double */
+
+    char got_c;
+    int got_d;
+    char *got_s = malloc(MAX_SIZE_STR);
+    float got_f;
+
+    deserilize_row(row,tbl->expression,tbl->num_attri,&got_c,&got_d,got_s,&got_f);
+
+    cr_expect_eq(got_c,'B');
+    cr_expect_eq(got_d,256);
+    cr_expect_str_eq(got_s, "Payload");
+    cr_expect_float_eq(got_f, 3.1415, 1e-6, "Ratio field");
+    
+    printf("got_c (Grade): %c\n", got_c);
+    printf("got_d (Count): %d\n", got_d);
+    printf("got_s (Label): %s\n", got_s);
+    printf("got_f (Ratio): %f\n", got_f);
+
+    free(got_s);
+    kill_row(row);
+    kill_table(tbl);
+}
+
 #if 0
 
 int main(void){
