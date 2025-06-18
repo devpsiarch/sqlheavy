@@ -7,15 +7,26 @@
 
 #define MAX_SIZE_STR 255    // for now i will allow only string that are 255 size in bytes.
 
+#define PAGE_SIZE 4096
+#define TABLE_MAX_PAGES 100
+ 
+
 typedef struct {
     size_t num_attri;
-    String name_of_table;   // used to identify/index the table when many exist
-    String* expression;     // this is a da of strings that experss the content of the rows in this database.
-                            // exmaple : "%d" "%s" "%lf" the db has a (int,string,double) attributes 
-                            // stored in memry linearly in this order. there for each row's size is 
-                            // 4 + 8 + 8 = 20 bytes.
-    String* attributes;     // these are the names of said attributes for take the above example : 
-                            // "ID" "Name" "Balance". 
+    String name_of_table;         // used to identify/index the table when many exist
+    String* expression;           // this is a da of strings that experss the content of the rows in this database.
+                                  // exmaple : "%d" "%s" "%lf" the db has a (int,string,double) attributes 
+                                  // stored in memry linearly in this order. there for each row's size is 
+                                  // 4 + 8 + 8 = 20 bytes.
+    String* attributes;           // these are the names of said attributes for take the above example : 
+                                  // "ID" "Name" "Balance". 
+    unsigned int SIZE_ROW;        // its a bit redundent to have this , but since table and row stucts never really meet then 
+                                  // it does not matter much , for now this stays , if i find something better sure.
+    unsigned int ROWS_PER_PAGE;   // tells us how many rows per page , like duh
+    unsigned int TABLE_MAX_ROWS;  // self explained.
+    size_t count_rows;            // tells us the current row we are int , acts like the count for da.
+    void *pages[TABLE_MAX_PAGES]; // since for now the data is stored in memory , but this is where the data will live
+                                  // in the form of pages that we index and find the specific row we want 
 }Table;
 
 // let me explain how would we handle the rows in some table
@@ -42,13 +53,12 @@ typedef struct {
     } Row;
 #endif
 
-// bases on the types of the expression returns the const size for said row
-size_t calculate_size_row(String*expression,unsigned int count);
 
-Row* init_row(String*expression,unsigned int count);
+Row* init_row(Table*t);
 void kill_row(Row*r);
 
-
+// bases on the types of the expression returns the const size for said row
+size_t calculate_size_row(String*expression,unsigned int count);
 // give it values it gives back a representaion of a row
 void serilize_row(Row*dst,String*expression,const unsigned int count,...);
 // give it a row representaion and pointer to datamemebers and it will fill them out for you
@@ -91,8 +101,11 @@ fail:
     return 0;
 }
 
-Row* init_row(String*expression,unsigned int count){
-    size_t current_size = calculate_size_row(expression,count);
+// WARNING:if passes a not initilized table , it copies a possible wrong value
+// therefore be warry and enforce that tables are created before any rows are.
+// think of it as create some row from some table
+Row* init_row(Table*t){
+    size_t current_size = t->SIZE_ROW;
     if(current_size == 0){
         return NULL;
     }
@@ -124,6 +137,7 @@ Table* init_table(const unsigned int count,...){
     Table* obj = malloc(sizeof(Table));
     if(obj == NULL) return_defer(NULL);
     obj->num_attri = count;
+    obj->SIZE_ROW = 0;
     obj->expression = malloc(sizeof(String)*count);
     if(obj->expression == NULL) return_defer(NULL);
     obj->attributes = malloc(sizeof(String)*count);
@@ -138,6 +152,28 @@ Table* init_table(const unsigned int count,...){
         
         // printf("%s\n",next_type);
         // printf("%s\n",next_name);
+    
+        // We assert that the types are valid
+        if(next_type[0] != '%' && next_type[2] != '\0') return_defer(false);
+
+        switch (next_type[1]) {
+            case 'd':
+                obj->SIZE_ROW += sizeof(int);
+                break;
+            case 'f':
+                obj->SIZE_ROW += sizeof(float);
+                break;
+            case 'c':
+                obj->SIZE_ROW += sizeof(char);
+                break;
+            case 's':
+                obj->SIZE_ROW += MAX_SIZE_STR;
+                break;
+            default:
+                fprintf(stderr,"type/attribute %c not yet implimented.\n",next_type[1]);
+                return_defer(false);
+                break;
+        }
 
         obj->expression[i].items = malloc(strlen(next_type)+1);
         if(obj->expression[i].items == NULL) return_defer(false);
@@ -147,6 +183,12 @@ Table* init_table(const unsigned int count,...){
         strcpy(obj->attributes[i].items,next_name);
     }
     va_end(args);
+    obj->ROWS_PER_PAGE  = PAGE_SIZE / obj->SIZE_ROW; 
+    obj->TABLE_MAX_ROWS = obj->ROWS_PER_PAGE * TABLE_MAX_PAGES;
+    // init the pages for now in memory 
+    for(size_t i = 0 ; i < TABLE_MAX_PAGES ; i++){
+        obj->pages[i] = NULL;
+    }
 defer:
     if(result == false){
         kill_table(obj);
@@ -172,7 +214,12 @@ void kill_table(Table *t) {
     free(t->attributes);
     free(t->expression);
 
-    // 4) finally free the Table struct itself
+    // 4) free the pages is they exist
+    for(size_t i = 0 ; i < TABLE_MAX_PAGES ; i++){
+        free(t->pages[i]);
+    }
+
+    // 5) finally free the Table struct itself
     free(t);
 }
 
@@ -180,6 +227,7 @@ void kill_table(Table *t) {
 // if not ? it will exit with code 1
 // WARNING: this overrides the values we had before , so be warry
 void serilize_row(Row*dst,String*expression,const unsigned int count,...){
+    size_t original_size = dst->size_bytes;
     bool not_matching_size = false;
     bool wrong_format_expression = false;
     bool exceeded_max_str_size = false;
@@ -246,11 +294,15 @@ void serilize_row(Row*dst,String*expression,const unsigned int count,...){
                 break;
         }        
     }
+    if(dst->size_bytes != original_size){
+        not_matching_size = true;
+        goto fail;
+    }
     va_end(args);
     return;
 fail:
     va_end(args);
-    if(not_matching_size) fprintf(stderr,"Not matching sized when serilizing a row.\n");
+    if(not_matching_size) fprintf(stderr,"Not matching sized when serilizing a row, this row is not from the provided table.\n");
     if(wrong_format_expression) fprintf(stderr,"wrong format expression.\n");
     if(exceeded_max_str_size) fprintf(stderr, "exceeded the maximum size for a string.\n");
     exit(1);

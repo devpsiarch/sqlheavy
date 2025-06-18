@@ -160,7 +160,7 @@ Test(calculating_size_of_row, simple){
                             "%f", "Balance");
     cr_expect_eq(ans->num_attri, 3);
     cr_expect_eq(calculate_size_row(ans->expression,ans->num_attri),sizeof(int)+MAX_SIZE_STR+sizeof(float));
-    Row*test = init_row(ans->expression,ans->num_attri);
+    Row*test = init_row(ans);
     cr_expect_eq(test->size_bytes,sizeof(int)+MAX_SIZE_STR+sizeof(float));
     kill_row(test);
     kill_table(ans);
@@ -175,7 +175,7 @@ Test(serilize,init){
     cr_expect_eq(tbl->num_attri, 3);
 
     /* 2) Allocate a Row buffer for that schema */
-    Row*    row = init_row(tbl->expression, tbl->num_attri);
+    Row*    row = init_row(tbl);
     cr_assert_not_null(row);
 
     /* 3) Serialize one tuple: (42, "Alice", 99.5) */
@@ -233,7 +233,7 @@ Test(serilize, custom_schema) {
     cr_expect_eq(tbl->num_attri, 4);
 
     /* 2) Allocate a Row buffer for that schema */
-    Row* row = init_row(tbl->expression, tbl->num_attri);
+    Row* row = init_row(tbl);
     cr_assert_not_null(row);
 
     /* 3) Serialize one tuple: ('B', 256, "Payload", 3.1415f) */
@@ -291,7 +291,7 @@ Test(dessirilize,init){
     cr_expect_eq(tbl->num_attri, 4);
 
     /* 2) Allocate a Row buffer for that schema */
-    Row* row = init_row(tbl->expression, tbl->num_attri);
+    Row* row = init_row(tbl);
     cr_assert_not_null(row);
 
     /* 3) Serialize one tuple: ('B', 256, "Payload", 3.1415f) */
@@ -302,6 +302,8 @@ Test(dessirilize,init){
                  256,                    /* int */
                  "Payload",  /* string + max size */
                  3.1415);                /* float → promoted to double */
+
+    cr_expect_eq(tbl->SIZE_ROW,row->size_bytes);
 
     char got_c;
     int got_d;
