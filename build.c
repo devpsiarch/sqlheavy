@@ -24,6 +24,8 @@ int main(int argc,char*argv[]){
     tester.appendflags(&tester,"-Wall");
     tester.appendflags(&tester,"-Wextra");
     tester.appendflags(&tester,"-lcriterion");
+    tester.appendflags(&tester,"-fsanitize=address");
+    tester.appendflags(&tester,"-g");
     tester.appendflags(&tester,"-o");
 
     tester.construct(&tester);

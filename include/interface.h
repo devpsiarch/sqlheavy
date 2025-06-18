@@ -167,6 +167,7 @@ bool db_interactive(void){
                     break;
             }
         }
+        da_free(&command);
     }
 defer:
     da_free(&command);

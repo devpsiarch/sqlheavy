@@ -34,6 +34,7 @@ typedef struct {
 #define Token_free(t) \
 do{                   \
     free((t)->lexeme);\
+    free((t));        \
 }while(0)     
 
 // for convinence and to use the tool.h macros
