@@ -2,6 +2,7 @@
 #define TOOL_H
 
 #include <stdio.h>
+#include <ctype.h>
 
 #define ASSERT(cond,...)                                                \
 do{                                                                     \
@@ -68,8 +69,50 @@ typedef struct {
     size_t count;
 }String;
 
+typedef struct {
+    int *items;
+    size_t capacity;
+    size_t count;
+}int_arr;
+
+bool stoi(const char*str,int*ans);
+
 #endif
 #ifndef TOOL_IMPLI
 #define TOOL_IMPLI
+
+bool stoi(const char *str, int *ans) {
+    bool result = true;
+    size_t i = 0;
+    int sign = 1;
+
+    // Empty string? fail immediately
+    if (str[0] == '\0')
+        return false;
+
+    // Handle optional sign
+    if (str[0] == '-' || str[0] == '+') {
+        if (str[0] == '-')
+            sign = -1;
+        i++;
+        // “-” or “+” only with no digits is invalid
+        if (str[i] == '\0')
+            return false;
+    }
+
+    *ans = 0;
+    for (; str[i] != '\0'; i++) {
+        unsigned char c = (unsigned char)str[i];
+        if (!isdigit(c))
+            return_defer(false);
+
+        *ans = (*ans * 10) + (c - '0');
+    }
+
+    *ans *= sign;
+
+defer:
+    return result;
+}
 
 #endif

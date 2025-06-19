@@ -4,12 +4,18 @@
 #include "tool.h"
 #include <stdarg.h>
 #include <string.h>
+#include <assert.h>
 
 #define MAX_SIZE_STR 255    // for now i will allow only string that are 255 size in bytes.
 
 #define PAGE_SIZE 4096
 #define TABLE_MAX_PAGES 100
  
+
+#define UNIMPLIMENTED_TYPE(c)                                           \
+do{                                                                     \
+    fprintf(stderr,"type/attribute \"%c\" not yet implimented.\n",(c)); \
+}while(0)                       
 
 typedef struct {
     size_t num_attri;
@@ -53,6 +59,10 @@ typedef struct {
     } Row;
 #endif
 
+// given a table (there for a expression) it print the data using printf to stdout.
+// used mostly for debugging and stuff.
+void print_varadic_expression(Table*t,va_list args);
+
 
 Row* init_row(Table*t);
 void kill_row(Row*r);
@@ -61,15 +71,62 @@ void kill_row(Row*r);
 size_t calculate_size_row(String*expression,unsigned int count);
 // give it values it gives back a representaion of a row
 void serilize_row(Row*dst,String*expression,const unsigned int count,...);
+// version that takes va_list that the above calls
+void serilize_row_v(Row*dst,String*expression,const unsigned int count,va_list args);
 // give it a row representaion and pointer to datamemebers and it will fill them out for you
 void deserilize_row(const Row*src,String*expression,const unsigned int count,...);
+// same memo 
+void deserilize_row_v(const Row*src,String*expression,const unsigned int count,va_list args);
 
 Table* init_table(const unsigned int count,...);
 void kill_table(Table*t);
 
+
+// for this function , we will give it a table (already initilized) and 
+// a number of row we want to read from it , it shall : 
+// - find the page the row is in 
+// - allocated page if not allocated 
+// - get the pointer to the start of the row for the API to extract
+void* row_select(Table* t,unsigned int row_num);
+
+// this function shall write the serilized representation of a row 
+// for the first availble position in the table.
+// this behavior will remain for now untile further notice.
+// it shall: 
+// - create a row on the heap from varadic values
+// - copy its serilized to the first availble position using row_select
+void write_row(Table*t,unsigned int count,...);
+
+// this shall read only from the rows of the table 
+// when provided with a row_num
+void read_row(Table*t,unsigned int row_num,unsigned int count,...);
+
 #endif
 #ifndef TABLE_IMPLI 
 #define TABLE_IMPLI
+
+// expects the table to be inited already
+void print_varadic_expression(Table*t,va_list args){
+    for(size_t i = 0 ; i < t->num_attri ; i++){
+        switch(t->expression[i].items[1]){
+            case 'd':
+                printf("%s : %d,",t->attributes[i].items,va_arg(args,int));
+                break;
+            case 'f':
+                printf("%s : %f,",t->attributes[i].items,(float)va_arg(args,double));
+                break;
+            case 'c':
+                printf("%s : %c,",t->attributes[i].items,(char)va_arg(args,int));
+                break;
+            case 's':
+                printf("%s : %s,",t->attributes[i].items,va_arg(args,char*));
+                break;
+            default:
+                break;
+        }
+    }
+    printf("\n");
+}
 
 
 size_t calculate_size_row(String*expression,unsigned int count){
@@ -170,7 +227,7 @@ Table* init_table(const unsigned int count,...){
                 obj->SIZE_ROW += MAX_SIZE_STR;
                 break;
             default:
-                fprintf(stderr,"type/attribute %c not yet implimented.\n",next_type[1]);
+                UNIMPLIMENTED_TYPE(next_type[1]);
                 return_defer(false);
                 break;
         }
@@ -185,6 +242,7 @@ Table* init_table(const unsigned int count,...){
     va_end(args);
     obj->ROWS_PER_PAGE  = PAGE_SIZE / obj->SIZE_ROW; 
     obj->TABLE_MAX_ROWS = obj->ROWS_PER_PAGE * TABLE_MAX_PAGES;
+    obj->count_rows = 0;            // this missed init cost me 1h
     // init the pages for now in memory 
     for(size_t i = 0 ; i < TABLE_MAX_PAGES ; i++){
         obj->pages[i] = NULL;
@@ -223,98 +281,86 @@ void kill_table(Table *t) {
     free(t);
 }
 
-// this expects the number of elemnts in expression to be the same as count 
-// if not ? it will exit with code 1
-// WARNING: this overrides the values we had before , so be warry
-void serilize_row(Row*dst,String*expression,const unsigned int count,...){
+
+void serilize_row_v(Row*dst,String*expression,const unsigned int count,va_list args){
     size_t original_size = dst->size_bytes;
     bool not_matching_size = false;
     bool wrong_format_expression = false;
     bool exceeded_max_str_size = false;
-    va_list args;
-    va_start(args,count);
-    // records the size at this point of some row , grow with each 
-    // data member
-    dst->size_bytes = 0; 
-    for(unsigned int i = 0 ; i < count ; i++){
-        if(expression[i].items[0] != '%'){
+
+    dst->size_bytes = 0;
+    for(unsigned int i = 0; i < count; i++) {
+        if (expression[i].items[0] != '%') {
             wrong_format_expression = true;
             goto fail;
         }
-        // match every (availble for now) type of data can be stored
         switch (expression[i].items[1]) {
-            // if var args failed it will crash the prog
-            case 'd': {
-                int val = va_arg(args,int);
-                memcpy(dst->data+dst->size_bytes,&val,sizeof(int));
-                dst->size_bytes+=sizeof(int);
-                break;
-            }
-            case 'f': {
-                // va_args promotes type float to dounbe
-                float val = (float)va_arg(args,double);
-                memcpy(dst->data+dst->size_bytes,&val,sizeof(float));
-                dst->size_bytes+=sizeof(float);
-                break;
-            }
-            case 'c': {
-                // and char , short .. to int
-                char val = (char)va_arg(args,int);
-                memcpy(dst->data+dst->size_bytes,&val,sizeof(char));
-                dst->size_bytes+=sizeof(char);
-                break;
-            }
-            case 's': {
-                char *val = va_arg(args, char*);
-                if (!val) {
-                    exceeded_max_str_size = true;
-                    goto fail;
-                }
-
-                size_t str_len = strlen(val);
-                // Need +1 so there's room for the NUL
-                if (str_len + 1 > MAX_SIZE_STR) {
-                    exceeded_max_str_size = true;
-                    goto fail;
-                }
-
-                // Copy the string _with_ its terminator
-                memcpy(dst->data + dst->size_bytes, val, str_len + 1);
-                // Zero‐pad any remainder
-                memset(dst->data + dst->size_bytes + str_len + 1,
-                       0,
-                       MAX_SIZE_STR - (str_len + 1));
-
-                dst->size_bytes += MAX_SIZE_STR;
-                break;
-            }
-            default:
-                fprintf(stderr,"type/attribute %c not yet implimented.\n",expression[i].items[1]);
-                exit(1);
-                break;
-        }        
+        case 'd': {
+            int val = va_arg(args, int);
+            memcpy(dst->data + dst->size_bytes, &val, sizeof(val));
+            dst->size_bytes += sizeof(val);
+            break;
+        }
+        case 'f': {
+            float val = (float)va_arg(args, double);
+            memcpy(dst->data + dst->size_bytes, &val, sizeof(val));
+            dst->size_bytes += sizeof(val);
+            break;
+        }
+        case 'c': {
+            char val = (char)va_arg(args, int);
+            memcpy(dst->data + dst->size_bytes, &val, sizeof(val));
+            dst->size_bytes += sizeof(val);
+            break;
+        }
+        case 's': {
+            char *val = va_arg(args, char*);
+            if (!val) { exceeded_max_str_size = true; goto fail; }
+            size_t len = strlen(val);
+            if (len + 1 > MAX_SIZE_STR) { exceeded_max_str_size = true; goto fail; }
+            memcpy(dst->data + dst->size_bytes, val, len + 1);
+            memset(dst->data + dst->size_bytes + len + 1,
+                   0,
+                   MAX_SIZE_STR - (len + 1));
+            dst->size_bytes += MAX_SIZE_STR;
+            break;
+        }
+        default:
+            fprintf(stderr, "Unknown format “%c”\n", expression[i].items[1]);
+            exit(1);
+        }
     }
-    if(dst->size_bytes != original_size){
+
+    if (dst->size_bytes != original_size) {
         not_matching_size = true;
         goto fail;
     }
-    va_end(args);
+
     return;
+
 fail:
-    va_end(args);
-    if(not_matching_size) fprintf(stderr,"Not matching sized when serilizing a row, this row is not from the provided table.\n");
-    if(wrong_format_expression) fprintf(stderr,"wrong format expression.\n");
-    if(exceeded_max_str_size) fprintf(stderr, "exceeded the maximum size for a string.\n");
+    if (not_matching_size)
+        fprintf(stderr, "Size mismatch in serialize_row\n");
+    if (wrong_format_expression)
+        fprintf(stderr, "Bad format in serialize_row\n");
+    if (exceeded_max_str_size)
+        fprintf(stderr, "String too big in serialize_row\n");
     exit(1);
 }
 
-// we pass a Row as src and pass somepointers to extract the data to those pointers 
-// WARNING: be sure to pass a correct arguments.
-// This function shall not alter the state of the Row*src
-void deserilize_row(const Row*src,String*expression,const unsigned int count,...){
-    bool wrong_format_expression = false;
+// this expects the number of elemnts in expression to be the same as count 
+// if not ? it will exit with code 1
+// WARNING: this overrides the values we had before , so be warry
+void serilize_row(Row*dst,String*expression,const unsigned int count,...){
     va_list args;
-    va_start(args,count);
+    va_start(args, count);
+    serilize_row_v(dst, expression, count, args);
+    va_end(args);
+}
+
+
+void deserilize_row_v(const Row*src,String*expression,const unsigned int count,va_list args){
+    bool wrong_format_expression = false;
     size_t indexer = 0;     // this will tell us where we start reading/copying from the row
     for(unsigned int i = 0 ; i < count ; i++){
         if(expression[i].items[0] != '%'){
@@ -347,17 +393,107 @@ void deserilize_row(const Row*src,String*expression,const unsigned int count,...
                 break;
             }
             default:
-                fprintf(stderr,"type/attribute \"%c\" not yet implimented.\n",expression[i].items[1]);
+                UNIMPLIMENTED_TYPE(expression[i].items[1]);
                 exit(1);
                 break;
         }
     }
-    va_end(args);
+    ASSERT(indexer == src->size_bytes,"mismatch in size_bytes while  desiralization");
     return;
 fail:
-    va_end(args);
     if(wrong_format_expression) fprintf(stderr,"wrong format expression.\n");
     exit(1);
+}
+
+// we pass a Row as src and pass somepointers to extract the data to those pointers 
+// WARNING: be sure to pass a correct arguments.
+// This function shall not alter the state of the Row*src
+void deserilize_row(const Row*src,String*expression,const unsigned int count,...){
+    va_list args;
+    va_start(args,count);
+    deserilize_row_v(src,expression,count,args);
+    va_end(args);
+}
+
+
+void* row_select(Table* t,unsigned int row_num){
+    unsigned int page_num = row_num / t->ROWS_PER_PAGE;
+    ASSERT(page_num < TABLE_MAX_PAGES,"EXCEEDED MAX PAGE COUNT");
+    void* page = t->pages[page_num];
+    if(page == NULL){
+        page = t->pages[page_num] = malloc(PAGE_SIZE);
+    }
+    unsigned int row_offset = row_num % t->ROWS_PER_PAGE;
+    unsigned int bytes_offset = row_offset * t->SIZE_ROW;
+    return (char*)page + bytes_offset;
+}
+
+
+void write_row(Table*t,unsigned int count,...){
+    if(t->count_rows >= t->TABLE_MAX_ROWS) return;
+    va_list args;
+    va_start(args,count);
+    Row*r = init_row(t);
+
+    // init the row with the data
+    serilize_row_v(r,t->expression,count,args);
+
+    va_end(args);
+    
+    // copy the data to the right location in the table pages
+    memcpy(row_select(t,t->count_rows),r->data,r->size_bytes);
+
+    // inc the count_rows
+    ++t->count_rows;
+    
+    // clean after yourself
+    kill_row(r);
+}
+
+
+void read_row(Table*t,unsigned int row_num,unsigned int count,...){
+    // the varadic args are pointers to data members.
+    
+    ASSERT(count == t->num_attri,"COUNT != num_attri while reading row");
+
+
+    va_list args;
+    va_start(args,count);
+    
+    // create a row for data to be copied to 
+    Row*r = init_row(t);
+    
+    ASSERT(r->size_bytes == t->SIZE_ROW,"size_bytes != SIZE_ROWS while reading row");
+
+
+    void *src = row_select(t, row_num);
+
+    assert(src != NULL);
+    assert(r->data != NULL);
+    assert(r->size_bytes == t->SIZE_ROW);
+    assert(r->size_bytes <= t->SIZE_ROW);
+
+
+    // copy data from spot to the row
+    memcpy(r->data,src,r->size_bytes);
+
+    va_list args_copy;
+    va_copy(args_copy, args);
+
+
+    // do the actual work
+    deserilize_row_v(r,            // or &r if your signature wants a Row*
+                      t->expression,
+                      count,              // use the same count you passed
+                      args);
+
+
+    print_varadic_expression(t, args_copy);
+
+    // tidy up
+    va_end(args_copy);
+    va_end(args);
+    kill_row(r);
 }
 
 #endif

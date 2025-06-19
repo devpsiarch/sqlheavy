@@ -7,8 +7,10 @@
 
 #define DELIM " "
 
+// hey dumy these require a small mod to the parser.
 
 // TODO: the command "CREATE" should be implimentented later
+// ALSO: '..' token to indicate a series of ints
 typedef enum {
     SELECT,
     INSERT,
@@ -101,6 +103,9 @@ arr_tokens* parser(const char*str){
             case '(': type = OPEN_PAR; break;
             case ')': type = CLOSE_PAR; break;
             case ',': type = COMMA; break;
+            default:
+                if(isdigit(*p)) type = ID;
+                break;
         }
         if(type != UNKNOWN){
             lexeme = malloc(2);

@@ -35,7 +35,7 @@ Test(parsing, insert_command) {
     
     cr_expect_eq(result->count, 5);
     cr_expect_eq(result->items[0].type, INSERT);
-    cr_expect_eq(result->items[1].type, UNKNOWN);
+    cr_expect_eq(result->items[1].type, ID);
     cr_expect_str_eq(result->items[1].lexeme, "1");
     cr_expect_eq(result->items[2].type, FROM);
     cr_expect_eq(result->items[3].type, TABLE);
@@ -203,19 +203,19 @@ Test(serilize,init){
     char  got_name[9] = {0};
     memcpy(got_name, row->data + off, 8);
     cr_expect_str_eq(got_name,"Alice");
-    printf("string gotten : %s\n",got_name);
+    //printf("string gotten : %s\n",got_name);
     off += MAX_SIZE_STR;
 
     /* c) check the float */
     float got_bal;
     memcpy(&got_bal, row->data + off, sizeof got_bal);
     cr_expect_eq(got_bal, 99.5f);
-    printf("gotten balance : %f\n",got_bal);
+    //printf("gotten balance : %f\n",got_bal);
     off += sizeof(got_bal);
 
     /* d) total size_bytes should match */
     cr_expect_eq(row->size_bytes, off);
-    printf("gotten size_bytes : %zu/%zu\n",off,row->size_bytes);
+    //printf("gotten size_bytes : %zu/%zu\n",off,row->size_bytes);
 
     /* 5) Clean up */
     kill_row(row);
@@ -321,17 +321,100 @@ Test(dessirilize,init){
     cr_expect_str_eq(got_s, "Payload");
     cr_expect_float_eq(got_f, 3.1415, 1e-6, "Ratio field");
     
-    printf("got_c (Grade): %c\n", got_c);
-    printf("got_d (Count): %d\n", got_d);
-    printf("got_s (Label): %s\n", got_s);
-    printf("got_f (Ratio): %f\n", got_f);
+    //printf("got_c (Grade): %c\n", got_c);
+    //printf("got_d (Count): %d\n", got_d);
+    //printf("got_s (Label): %s\n", got_s);
+    //printf("got_f (Ratio): %f\n", got_f);
 
     free(got_s);
     kill_row(row);
     kill_table(tbl);
 }
 
-#if 1
+
+Test(write_read_table, init) {
+    /* 1) build the table */
+    Table* tbl = init_table(4,
+                            "%c", "Grade",
+                            "%d", "Count",
+                            "%s", "Label",
+                            "%f", "Ratio");
+    cr_assert_not_null(tbl);
+    cr_expect_eq(tbl->num_attri, 4);
+
+    /* 2) write one row */
+    write_row(tbl, tbl->num_attri,
+              'B',            /* %c */
+              15,             /* %d */
+              "Knight",       /* %s */
+              0.9f);          /* %f */
+
+    /* 3) grab raw pointer to the first row’s payload */
+    void *row_ptr = row_select(tbl, 0);
+    cr_assert_not_null(row_ptr);
+
+    /* 4) decode each field in turn */
+    size_t offset = 0;
+
+    /* char Grade */
+    char grade = *(char *)((char *)row_ptr + offset);
+    cr_expect_eq(grade, 'B');
+    offset += sizeof(char);
+
+    /* int Count */
+    int count = *(int *)((char *)row_ptr + offset);
+    cr_expect_eq(count, 15);
+    offset += sizeof(int);
+
+    /* string Label */
+    char label_buf[MAX_SIZE_STR];
+    memcpy(label_buf, (char *)row_ptr + offset, MAX_SIZE_STR);
+    cr_expect_str_eq(label_buf, "Knight");
+    offset += MAX_SIZE_STR;
+
+    /* float Ratio */
+    float ratio;
+    memcpy(&ratio, (char *)row_ptr + offset, sizeof(float));
+    cr_expect_float_eq(ratio, 0.9f, 1e-6);
+
+    /* 5) cleanup */
+    kill_table(tbl);
+}
+
+
+Test(read_from_table,init){
+Table* tbl = init_table(4,
+                            "%c", "Grade",                                                                                  "%d", "Count",
+                            "%s", "Label",
+                            "%f", "Ratio");
+    cr_assert_not_null(tbl);
+    cr_expect_eq(tbl->num_attri, 4);
+    char got_c;
+    int got_d;
+    char *got_s = malloc(MAX_SIZE_STR);
+    float got_f;
+
+
+    write_row(tbl,tbl->num_attri,'B',256,"Payload",3.1415);
+
+
+    read_row(tbl,0,tbl->num_attri,&got_c,&got_d,got_s,&got_f);
+
+    cr_expect_eq(got_c,'B');
+    cr_expect_eq(got_d,256);
+    cr_expect_str_eq(got_s, "Payload");
+    cr_expect_float_eq(got_f, 3.1415, 1e-6, "Ratio field");
+
+    printf("got_c (Grade): %c\n", got_c);
+    printf("got_d (Count): %d\n", got_d);
+    printf("got_s (Label): %s\n", got_s);
+    printf("got_f (Ratio): %f\n", got_f);
+
+    kill_table(tbl);
+    free(got_s);
+}
+
+#if 0
 
 int main(void){
     db_interactive();

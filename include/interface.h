@@ -158,9 +158,10 @@ bool db_interactive(void){
         }else{
             switch(vm_execute_query(&command)){
                 case QUERY_SUCCESS:
+                    printf("Query executed with success.\n");
                     break;
                 case QUERY_FAIL:
-                    printf("Query not reconized.\n");
+                    printf("Query failed to execute.\n");
                     break;           
                 default:
                     exit(1);

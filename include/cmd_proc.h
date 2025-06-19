@@ -50,26 +50,68 @@ QueryResult vm_execute_query(String*str){
     // 2 , "INSERT" and "SELECT" well add the "CREATE" later 
     // to hanlde the creation of new tables
     switch(tokens->items[0].type){
-    case INSERT:
+    case INSERT: {
         printf("it is insert command\n");
         break;
-    case SELECT:
+    }
+    case SELECT : {
         // check if we only passed "select;"
         if(tokens->count == 2){
             printf("Can deduce intruction , too few tokens in col %zu\n",tokens->items[1].col);
             return_defer(QUERY_FAIL);
         }
-        // we expect (select , id , from , table, ;)
-        if(tokens->items[2].type != FROM){
+        // we expect (select , id ... , from , table, ;)
+        size_t current_token = 1;
+        int_arr rows_wanted = {0};
+        bool show_all = false;
+        while(tokens->items[current_token].type == ID){
+            int res;
+            if(stoi(tokens->items[current_token].lexeme,&res) == false){
+                printf("Invalid identifier \"%s\".\n",tokens->items[current_token].lexeme);
+                goto defer_select;
+            }
+            da_append(&rows_wanted,res);
+            current_token++;
+        }
+       
+        if(tokens->items[current_token].type == ALL){
+            show_all = true;
+            current_token++;
+        }
+
+        if(tokens->items[current_token].type != FROM){
             printf("Invalid syntax , missing \"from\" in col %zu\n",tokens->items[2].col);
             return_defer(QUERY_FAIL);
         }
-        if(tokens->items[3].type != ID){
+        current_token++;
+        if(tokens->items[current_token].type != ID){
             printf("Invalid syntax , missing table name in col %zu\n",tokens->items[3].col);
             return_defer(QUERY_FAIL);
         }
         // look up if this table exists
+        // for now we only accept the table "users".    
+        // this section is supposed it be for the future a search 
+        // and indicate for table namespace 
+        if(strcmp(tokens->items[current_token].lexeme,"users") != 0){
+            printf("Table \"%s\" not found in database.\n",tokens->items[current_token].lexeme);
+            goto defer_select;
+        }
+        // here we loop through the tables and seach by the rows that
+        // we got from the command
+        if(show_all){
+            // for i from 0 to table.num_rows print row 
+        }else{
+            for(size_t i = 0 ; i < rows_wanted.count ; i++){
+                // call the select row by number rows_wanted.items[i]
+                // call deserilize 
+                // print output in format
+            }  
+        }
+
+    defer_select:
+        da_free(&rows_wanted);
         break;
+    }
     default:
         return_defer(QUERY_FAIL);
         break;
