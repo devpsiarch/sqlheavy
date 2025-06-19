@@ -37,30 +37,35 @@ MetaResult vm_execute_meta(String*str){
     }
 } 
 QueryResult vm_execute_query(String*str){
-    arr_tokens tokens = parser(str->items);
+    arr_tokens* tokens = parser(str->items);
     QueryResult result = QUERY_SUCCESS;
     // TODO: in the fure , we allows the user to input more commands
     // if there is no semicolen at the end 
     // for new we consider it as a error
-    if(tokens.items[tokens.count-1].type != SEMI){
+    if(tokens->items[tokens->count-1].type != SEMI){
         printf("MISSING SEMICOLEN AT QUERY\n");
         return_defer(QUERY_FAIL);
     }
     // match the type of the command , for now we have 
     // 2 , "INSERT" and "SELECT" well add the "CREATE" later 
     // to hanlde the creation of new tables
-    switch(tokens.items[0].type){
+    switch(tokens->items[0].type){
     case INSERT:
         printf("it is insert command\n");
         break;
     case SELECT:
-        // we expect (select , id , from , table, ;)
-        if(tokens.items[2].type != FROM){
-            printf("Invalid syntax , missing \"from\" in col %zu\n",tokens.items[2].col);
+        // check if we only passed "select;"
+        if(tokens->count == 2){
+            printf("Can deduce intruction , too few tokens in col %zu\n",tokens->items[1].col);
             return_defer(QUERY_FAIL);
         }
-        if(tokens.items[3].type != ID){
-            printf("Invalid syntax , missing table name in col %zu\n",tokens.items[3].col);
+        // we expect (select , id , from , table, ;)
+        if(tokens->items[2].type != FROM){
+            printf("Invalid syntax , missing \"from\" in col %zu\n",tokens->items[2].col);
+            return_defer(QUERY_FAIL);
+        }
+        if(tokens->items[3].type != ID){
+            printf("Invalid syntax , missing table name in col %zu\n",tokens->items[3].col);
             return_defer(QUERY_FAIL);
         }
         // look up if this table exists
@@ -70,7 +75,8 @@ QueryResult vm_execute_query(String*str){
         break;
     }
 defer:
-    toke_arr_free(&tokens);
+    toke_arr_free(tokens);
+    free(tokens);
     return result;
 }
 

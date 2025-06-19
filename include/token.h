@@ -34,7 +34,7 @@ typedef struct {
 #define Token_free(t) \
 do{                   \
     free((t)->lexeme);\
-    free((t));        \
+    (t)->lexeme=NULL; \
 }while(0)     
 
 // for convinence and to use the tool.h macros
@@ -44,15 +44,14 @@ typedef struct {
     size_t capacity;
 }arr_tokens;
 
-#define toke_append(da,t,l,c)   \
-do{                             \
-    da_realloc((da));           \
-    Token temp = {              \
-        .type = (t),            \
-        .lexeme = (l),          \
-        .col = (c),             \
-    };                          \
-    da_append((da),(temp));     \
+#define toke_append(da,t,l,c)                   \
+do{                                             \
+    Token temp = {                              \
+        .type = (t),                            \
+        .lexeme = (l),                          \
+        .col = (c),                             \
+    };                                          \
+    da_append((da),(temp));                     \
 }while(0)
 
 #define toke_arr_free(da)                     \
@@ -60,19 +59,27 @@ do{                                           \
     for(size_t i = 0 ; i < (da)->count ; i++){\
         Token_free(&(da)->items[i]);          \
     }                                         \
+    free((da)->items);                        \
+    (da)->items = NULL;                       \
+    (da)->count = 0;                          \
+    (da)->capacity = 0;                       \
 }while(0)
 
 // takes a string from the user input and retuns an array 
 // of tokens
-arr_tokens parser(const char*str);
+arr_tokens* parser(const char*str);
 
 #endif
 #ifndef TOKEN_IMPLI 
 #define TOKEN_IMPLI
 
 
-arr_tokens parser(const char*str){
-    arr_tokens result = {0};
+arr_tokens* parser(const char*str){
+    arr_tokens* result = malloc(sizeof(arr_tokens));
+    result->items = NULL;
+    result->count = 0;
+    result->capacity = 0;
+    
     size_t current_col = 0;
     const char*p = str;
     
@@ -100,7 +107,7 @@ arr_tokens parser(const char*str){
             if(lexeme){
                 lexeme[0] = *p;
                 lexeme[1] ='\0';
-                toke_append(&result,type,lexeme,tok_start);
+                toke_append(result,type,lexeme,tok_start);
             }
             p++;
             current_col++;
@@ -126,7 +133,7 @@ arr_tokens parser(const char*str){
                 else if (strcasecmp(lexeme, "table") == 0) type = TABLE;
                 else type = ID;
             
-                toke_append(&result,type,lexeme,tok_start);
+                toke_append(result,type,lexeme,tok_start);
             }
             continue;
         }
@@ -135,7 +142,7 @@ arr_tokens parser(const char*str){
         if (lexeme) {
             lexeme[0] = *p;
             lexeme[1] = '\0';
-            toke_append(&result, UNKNOWN, lexeme, tok_start);
+            toke_append(result, UNKNOWN, lexeme, tok_start);
         }
         p++;
         current_col++;
