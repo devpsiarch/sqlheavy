@@ -22,6 +22,12 @@ typedef enum {
     OPEN_PAR,
     CLOSE_PAR,
     COMMA,
+    SQUOTE,
+    DQUOTE,
+    CHAR,
+    INT,
+    STRING,
+    FLOAT,
     UNKNOWN
 }token_t;
 
@@ -107,6 +113,50 @@ arr_tokens* parser(const char*str){
                 if(isdigit(*p)) type = ID;
                 break;
         }
+        // parse string lettirals
+        if(*p == '\"'){
+            const char* start = p;
+            while(*p != '\"'){
+                p++;
+                current_col++;
+            }
+            int len = p - start - 2;
+            // we ignore and let it to the interpriter to 
+            // make sense of it
+            if(len < 0){
+                p++;
+                current_col++;
+                continue;
+            }
+            lexeme = malloc((size_t)len+1);
+            strncpy(lexeme,start+1,(size_t)len);
+            lexeme[len] = '\0';
+        
+            type = STRING;
+
+            toke_append(result,type,lexeme,tok_start); 
+        }
+        // parse values like numbers
+        if(isdigit(*p)){
+            bool is_float = false;
+            const char* start = p;
+            while(isdigit(*p) || *p == '.'){
+                if(*p == '.') is_float = true;
+                p++;
+                current_col++;
+            }
+            size_t len = p - start;
+            lexeme = malloc(len+1);
+            if(lexeme){
+                strncpy(lexeme,start,len);
+                lexeme[len] = '\0';
+                type = (is_float) ? FLOAT : INT;
+
+                toke_append(result,type,lexeme,tok_start); 
+            }
+            continue;
+
+        }
         if(type != UNKNOWN){
             lexeme = malloc(2);
             if(lexeme){
@@ -118,6 +168,7 @@ arr_tokens* parser(const char*str){
             current_col++;
             continue;
         }
+
         // hanlde identifier or keyword 
         if(isalpha((unsigned char)*p) || *p == '_'){
             const char* start = p;

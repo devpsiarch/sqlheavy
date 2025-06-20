@@ -189,7 +189,10 @@ do{                                                                             
 
 // these functions shall manage there own memory and "outs" as they 
 // should be already inited
+
+// this expects outs to already have data memebers inited
 void write_row_dyn(Table*t,void**outs);
+// this fills the outs ds and lets you do whatever you want with it
 void read_row_dyn(Table*t,unsigned int row_num,outs_package*outs);
 
 #endif

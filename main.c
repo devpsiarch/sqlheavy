@@ -35,12 +35,28 @@ Test(parsing, insert_command) {
     
     cr_expect_eq(result->count, 5);
     cr_expect_eq(result->items[0].type, INSERT);
-    cr_expect_eq(result->items[1].type, ID);
+    cr_expect_eq(result->items[1].type, INT);
     cr_expect_str_eq(result->items[1].lexeme, "1");
     cr_expect_eq(result->items[2].type, FROM);
     cr_expect_eq(result->items[3].type, TABLE);
     cr_expect_eq(result->items[4].type, SEMI);
     
+    // Cleanup
+    toke_arr_free(result);
+    free(result); 
+}
+
+Test(parsing, insert_command_complex) {
+    char* test = "insert (420,\"hello\",18.10) into users;";
+    arr_tokens* result = parser(test);
+    
+    for(size_t i = 0 ; i < result->count ; i++){
+        printf("token (%zu) => %s\n",i,result->items[i].lexeme);
+    }
+   
+    cr_expect_eq(result->count, 11);
+
+
     // Cleanup
     toke_arr_free(result);
     free(result); 
@@ -414,7 +430,7 @@ Table* tbl = init_table(4,
     free(got_s);
 }
 
-#if 1
+#if 0
 
 int main(void){
     db_interactive();

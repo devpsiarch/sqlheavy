@@ -66,7 +66,7 @@ QueryResult vm_execute_query(Table*t,String*str){
         size_t current_token = 1;
         int_arr rows_wanted = {0};
         bool show_all = false;
-        while(tokens->items[current_token].type == ID){
+        while(tokens->items[current_token].type == INT){
             int res;
             if(stoi(tokens->items[current_token].lexeme,&res) == false){
                 printf("Invalid identifier \"%s\".\n",tokens->items[current_token].lexeme);
