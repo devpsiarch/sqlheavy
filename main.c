@@ -384,7 +384,7 @@ Test(write_read_table, init) {
 
 Test(read_from_table,init){
 Table* tbl = init_table(4,
-                            "%c", "Grade",                                                                                  "%d", "Count",
+                            "%c", "Grade",                                                                                              "%d", "Count",
                             "%s", "Label",
                             "%f", "Ratio");
     cr_assert_not_null(tbl);
@@ -414,7 +414,7 @@ Table* tbl = init_table(4,
     free(got_s);
 }
 
-#if 0
+#if 1
 
 int main(void){
     db_interactive();

@@ -61,7 +61,7 @@ typedef struct {
 
 // given a table (there for a expression) it print the data using printf to stdout.
 // used mostly for debugging and stuff.
-void print_varadic_expression(Table*t,va_list args);
+void print_varadic_expression_ref(Table*t,va_list args);
 
 
 Row* init_row(Table*t);
@@ -101,22 +101,113 @@ void write_row(Table*t,unsigned int count,...);
 // when provided with a row_num
 void read_row(Table*t,unsigned int row_num,unsigned int count,...);
 
+
+// alternate versions of the above that do the exact same only 
+// that we send them pointers to atrbitrary types then the functions fills them up 
+// and lets us decode them using the expression string 
+
+typedef struct {
+    void**ptr;
+}outs_package;
+
+/* Convenience macro to handle an out‑of‑memory error */
+#define OOM_CHECK(p)                              \
+    do { if (!(p)) {                              \
+            fprintf(stderr, "Out of memory\n");  \
+            exit(EXIT_FAILURE);                  \
+        } } while (0)
+
+/* INIT_OUTS: allocates the outs.ptr array and a buffer for each column */
+#define INIT_OUTS(T, outs)                                                \
+    do {                                                                  \
+        size_t _n = (T)->num_attri;                                       \
+        (outs).ptr = malloc(_n * sizeof *(outs).ptr);                     \
+        OOM_CHECK((outs).ptr);                                            \
+        for (size_t i = 0; i < _n; i++) {                                 \
+            char _fmt = (T)->expression[i].items[1];                      \
+            switch (_fmt) {                                               \
+                case 'c':                                                 \
+                    (outs).ptr[i] = malloc(sizeof(char));                 \
+                    break;                                                \
+                case 'd':                                                 \
+                    (outs).ptr[i] = malloc(sizeof(int));                  \
+                    break;                                                \
+                case 'f':                                                 \
+                    (outs).ptr[i] = malloc(sizeof(float));                \
+                    break;                                                \
+                case 's':                                                 \
+                    (outs).ptr[i] = malloc(MAX_SIZE_STR);                 \
+                    break;                                                \
+                default:                                                  \
+                    /* clean up anything we’ve already malloc’d */        \
+                    for (size_t _j = 0; _j < i; _j++)                     \
+                        free((outs).ptr[_j]);                             \
+                    free((outs).ptr);                                     \
+                    fprintf(stderr, "Unimplemented type: %c\n", _fmt);    \
+                    exit(EXIT_FAILURE);                                   \
+            }                                                             \
+            OOM_CHECK((outs).ptr[i]);                                     \
+        }                                                                 \
+    } while (0)
+
+/* FREE_OUTS: frees each buffer and then the ptr array itself */
+#define FREE_OUTS(T, outs)                       \
+    do {                                         \
+        size_t _n = (T)->num_attri;              \
+        for (size_t _i = 0; _i < _n; _i++)       \
+            free((outs).ptr[_i]);               \
+        free((outs).ptr);                       \
+        (outs).ptr = NULL;                      \
+    } while (0)
+
+
+#define PRINT_OUTS(T,outs)                                                          \
+do{                                                                                 \
+    for(size_t i = 0 ; i < (T)->num_attri ; i++){                                   \
+        char fmt = (T)->expression[i].items[1];                                     \
+        switch(fmt){                                                                \
+            case 'd':                                                               \
+                printf("%s : %d,",t->attributes[i].items,*(int*)(outs.ptr[i]));     \
+                break;                                                              \
+            case 'f':                                                               \
+                printf("%s : %f,",t->attributes[i].items,*(float*)(outs.ptr[i]));   \
+                break;                                                              \
+            case 'c':                                                               \
+                printf("%s : %c,",t->attributes[i].items,*(char*)(outs.ptr[i]));    \
+                break;                                                              \
+            case 's':                                                               \
+                printf("%s : %s,",t->attributes[i].items,(char*)(outs.ptr[i]));     \
+                break;                                                              \
+            default:                                                                \
+                UNIMPLIMENTED_TYPE(fmt);                                            \
+                exit(1);                                                            \
+                break;                                                              \
+        }                                                                           \
+    }                                                                               \
+    printf("\n");                                                                   \
+}while(0)
+
+// these functions shall manage there own memory and "outs" as they 
+// should be already inited
+void write_row_dyn(Table*t,void**outs);
+void read_row_dyn(Table*t,unsigned int row_num,outs_package*outs);
+
 #endif
 #ifndef TABLE_IMPLI 
 #define TABLE_IMPLI
 
 // expects the table to be inited already
-void print_varadic_expression(Table*t,va_list args){
+void print_varadic_expression_ref(Table*t,va_list args){
     for(size_t i = 0 ; i < t->num_attri ; i++){
         switch(t->expression[i].items[1]){
             case 'd':
-                printf("%s : %d,",t->attributes[i].items,va_arg(args,int));
+                printf("%s : %d,",t->attributes[i].items,*va_arg(args,int*));
                 break;
             case 'f':
-                printf("%s : %f,",t->attributes[i].items,(float)va_arg(args,double));
+                printf("%s : %f,",t->attributes[i].items,*va_arg(args,float*));
                 break;
             case 'c':
-                printf("%s : %c,",t->attributes[i].items,(char)va_arg(args,int));
+                printf("%s : %c,",t->attributes[i].items,*va_arg(args,char*));
                 break;
             case 's':
                 printf("%s : %s,",t->attributes[i].items,va_arg(args,char*));
@@ -429,6 +520,10 @@ void* row_select(Table* t,unsigned int row_num){
 }
 
 
+// TODO: change the make another version if the 
+// row_select that does not allocate and only check is a row exits in a page 
+// and retuns a NULL otherwise
+
 void write_row(Table*t,unsigned int count,...){
     if(t->count_rows >= t->TABLE_MAX_ROWS) return;
     va_list args;
@@ -470,8 +565,6 @@ void read_row(Table*t,unsigned int row_num,unsigned int count,...){
 
     assert(src != NULL);
     assert(r->data != NULL);
-    assert(r->size_bytes == t->SIZE_ROW);
-    assert(r->size_bytes <= t->SIZE_ROW);
 
 
     // copy data from spot to the row
@@ -488,11 +581,57 @@ void read_row(Table*t,unsigned int row_num,unsigned int count,...){
                       args);
 
 
-    print_varadic_expression(t, args_copy);
+    print_varadic_expression_ref(t, args_copy);
 
     // tidy up
     va_end(args_copy);
     va_end(args);
+    kill_row(r);
+}
+
+
+// we assumse table is inited and right
+void read_row_dyn(Table*t,unsigned int row_num,outs_package*outs){
+    Row*r = init_row(t);
+    
+    ASSERT(r->size_bytes == t->SIZE_ROW,"size_bytes != SIZE_ROWS while reading row dynamiclly");
+
+    void*src = row_select(t,row_num);
+    
+    ASSERT(src != NULL,"src is NULL while reading dynamiclly");
+    ASSERT(r->data != NULL,"r->data is NULL while reading dynamiclly");
+   
+    memcpy(r->data,src,r->size_bytes);
+
+    
+    // populating the outs datastructe 
+    size_t offset = 0;
+    for (size_t i = 0; i < t->num_attri; i++) {
+        char fmt = t->expression[i].items[1];
+        switch (fmt) {
+        case 'c':
+            *(char*)outs->ptr[i] = *(char*)(r->data + offset);
+            offset += sizeof(char);
+            break;
+        case 'd':
+            memcpy(outs->ptr[i], r->data + offset, sizeof(int));
+            offset += sizeof(int);
+            break;
+        case 's':
+            memcpy(outs->ptr[i], r->data + offset, MAX_SIZE_STR);
+            offset += MAX_SIZE_STR;
+            break;
+        case 'f':
+            memcpy(outs->ptr[i], r->data + offset, sizeof(float));
+            offset += sizeof(float);
+            break;
+        default:
+            UNIMPLIMENTED_TYPE(fmt);
+            exit(1);
+            break;
+        }
+    }
+
     kill_row(r);
 }
 

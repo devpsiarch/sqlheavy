@@ -2,6 +2,7 @@
 #define CMD_PROC_H
 
 #include "token.h"
+#include "table.h"
 
 #define PRINT_HELP()                            \
 do{                                             \
@@ -20,7 +21,7 @@ typedef enum {
 }QueryResult;
 
 MetaResult vm_execute_meta(String*str);
-QueryResult vm_execute_query(String*str);
+QueryResult vm_execute_query(Table*t,String*str);
 
 #endif
 #ifndef CMD_PROC_IMPLI 
@@ -36,9 +37,10 @@ MetaResult vm_execute_meta(String*str){
         return META_FAIL;
     }
 } 
-QueryResult vm_execute_query(String*str){
+QueryResult vm_execute_query(Table*t,String*str){
     arr_tokens* tokens = parser(str->items);
     QueryResult result = QUERY_SUCCESS;
+    if(str->items[0] == '\0') return_defer(QUERY_FAIL);
     // TODO: in the fure , we allows the user to input more commands
     // if there is no semicolen at the end 
     // for new we consider it as a error
@@ -100,11 +102,25 @@ QueryResult vm_execute_query(String*str){
         // we got from the command
         if(show_all){
             // for i from 0 to table.num_rows print row 
+            outs_package outs;
+            INIT_OUTS(t,outs);
+            for(size_t i = 0 ; i < t->count_rows ; i++){
+                read_row_dyn(t,i,&outs);
+                PRINT_OUTS(t,outs);
+            }
+            FREE_OUTS(t,outs);   
         }else{
             for(size_t i = 0 ; i < rows_wanted.count ; i++){
                 // call the select row by number rows_wanted.items[i]
                 // call deserilize 
                 // print output in format
+                //read_row(t,i,t->num_attri,outs);
+                //print_outs(outs);
+                outs_package outs;
+                INIT_OUTS(t,outs);
+                read_row_dyn(t,rows_wanted.items[i],&outs);
+                PRINT_OUTS(t,outs);
+                FREE_OUTS(t,outs);
             }  
         }
 
