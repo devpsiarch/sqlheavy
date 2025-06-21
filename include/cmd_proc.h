@@ -53,7 +53,97 @@ QueryResult vm_execute_query(Table*t,String*str){
     // to hanlde the creation of new tables
     switch(tokens->items[0].type){
     case INSERT: {
-        printf("it is insert command\n");
+        size_t current_token = 1;
+        Row*r = init_row(t);
+        size_t offset = 0;
+        if(tokens->items[current_token].type == OPEN_PAR){
+            current_token++;
+            size_t num_expected_attri = t->num_attri;
+            while(tokens->items[current_token].type != CLOSE_PAR){
+                // populate the row depending on the type.
+                switch(tokens->items[current_token].type){
+                    case INT:{
+                        int val;
+                        if(stoi(tokens->items[current_token].lexeme,&val) == false){
+                            printf("Error in converting to in while interpreting query\n");
+                            goto defer_insert;
+                        }
+                        memcpy(r->data+offset,&val,sizeof(int));
+                        offset += sizeof(int);
+                        break;
+                    }
+                    case CHAR:{
+                        char val = *tokens->items[current_token].lexeme;
+                        memcpy(r->data+offset,&val,sizeof(char));
+                        offset += sizeof(char);
+                        break;
+                    }
+                    case FLOAT:{
+                        float val = stof(tokens->items[current_token].lexeme);
+                        memcpy(r->data+offset,&val,sizeof(float));
+                        offset += sizeof(float);
+                        break;
+                    }
+                    case STRING:{
+                        size_t len = strlen(tokens->items[current_token].lexeme);
+                        memcpy(r->data+offset,tokens->items[current_token].lexeme,len);
+                        memset(r->data+offset+len,0,MAX_SIZE_STR-len);
+                        offset += MAX_SIZE_STR;
+                        break;
+                    }
+                    default:
+                        printf("Unexpected type ... \n");
+                        goto defer_insert;
+                        break;
+                }
+                current_token++;
+                num_expected_attri--;
+                if(tokens->items[current_token].type != COMMA){
+                    if(tokens->items[current_token].type == CLOSE_PAR) continue;
+                    else{
+                        printf("Missing the closing parenthesis for insertion on col %zu.\n",
+                        tokens->items[current_token].col);
+                        goto defer_insert;
+                    }
+                }else{
+                    current_token++;
+                }
+            }
+            if(num_expected_attri != 0){
+                printf("Invalid number of attributes , exprected %zu gotten %zu\n",
+                t->num_attri,t->num_attri-num_expected_attri);
+                goto defer_insert;
+            }
+            current_token++;
+            if(tokens->items[current_token].type != INTO){
+                printf("Missing \"into\" instruction at col %zu\n",tokens->items[current_token].col);
+                goto defer_insert;
+            }
+            current_token++;
+            if(tokens->items[current_token].type != ID){
+                printf("Invalid syntax , missing table name in col %zu\n",tokens->items[3].col);
+                goto defer_insert;
+            }
+            // look up if this table exists
+            // for now we only accept the table "users".    
+            // this section is supposed it be for the future a search 
+            // and indicate for table namespace 
+            if(strcmp(tokens->items[current_token].lexeme,"users") != 0){
+                printf("Table \"%s\" not found in database.\n",tokens->items[current_token].lexeme);
+                goto defer_insert;
+            }
+            // we perform the job here
+            write_row_dyn(t,r);
+        }else{
+            goto defer_insert;
+        }
+
+
+        kill_row(r);
+        return_defer(QUERY_SUCCESS);
+        defer_insert:
+           kill_row(r);
+           return_defer(QUERY_FAIL);
         break;
     }
     case SELECT : {

@@ -55,6 +55,17 @@ Test(parsing, insert_command_complex) {
     }
    
     cr_expect_eq(result->count, 11);
+    cr_expect_eq(result->items[0].type, INSERT);
+    cr_expect_eq(result->items[1].type, OPEN_PAR);
+    cr_expect_eq(result->items[2].type, INT);
+    cr_expect_eq(result->items[3].type, COMMA);
+    cr_expect_eq(result->items[4].type, STRING);
+    cr_expect_eq(result->items[5].type, COMMA);
+    cr_expect_eq(result->items[6].type, FLOAT);
+    cr_expect_eq(result->items[7].type, CLOSE_PAR);
+    cr_expect_eq(result->items[8].type, INTO);
+    cr_expect_eq(result->items[9].type, ID);
+    cr_expect_eq(result->items[10].type, SEMI);
 
 
     // Cleanup
@@ -430,7 +441,11 @@ Table* tbl = init_table(4,
     free(got_s);
 }
 
-#if 0
+Test(to_float,init){
+    cr_expect_float_eq(stof("3.1415"), 3.1415, 1e-6, "Ratio field");
+}
+
+#if 1
 
 int main(void){
     db_interactive();

@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <ctype.h>
+#include <math.h>
 
 #define ASSERT(cond,...)                                                \
 do{                                                                     \
@@ -76,6 +77,7 @@ typedef struct {
 }int_arr;
 
 bool stoi(const char*str,int*ans);
+float stof(const char *s);
 
 #endif
 #ifndef TOOL_IMPLI
@@ -113,6 +115,56 @@ bool stoi(const char *str, int *ans) {
 
 defer:
     return result;
+}
+
+float stof(const char *s) {
+    // 1) Skip leading whitespace
+    while (isspace((unsigned char)*s)) {
+        s++;
+    }
+
+    // 2) Handle optional sign
+    int sign = 1;
+    if (*s == '+' || *s == '-') {
+        if (*s == '-') sign = -1;
+        s++;
+    }
+
+    // 3) Parse integer part
+    float result = 0.0f;
+    while (isdigit((unsigned char)*s)) {
+        result = result * 10.0f + (*s - '0');
+        s++;
+    }
+
+    // 4) Parse fractional part, if any
+    if (*s == '.') {
+        s++;
+        float place = 1.0f;
+        while (isdigit((unsigned char)*s)) {
+            place *= 0.1f;
+            result += (*s - '0') * place;
+            s++;
+        }
+    }
+
+    // 5) Parse exponent part, if any
+    if (*s == 'e' || *s == 'E') {
+        s++;
+        int exp_sign = 1;
+        if (*s == '+' || *s == '-') {
+            if (*s == '-') exp_sign = -1;
+            s++;
+        }
+        int exp_val = 0;
+        while (isdigit((unsigned char)*s)) {
+            exp_val = exp_val * 10 + (*s - '0');
+            s++;
+        }
+        result *= powf(10.0f, exp_sign * exp_val);
+    }
+
+    return sign * result;
 }
 
 #endif

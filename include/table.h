@@ -150,6 +150,35 @@ typedef struct {
         }                                                                 \
     } while (0)
 
+
+// given a serilized row , this will populate outs bases on the row
+#define POPULATE_OUTS(t,outs,r,i,offset)                                \
+do{                                                                     \
+    char fmt = (t)->expression[(i)].items[1];                           \
+    switch (fmt) {                                                      \
+    case 'c':                                                           \
+        *(char*)(outs)->ptr[(i)] = *(char*)((r)->data + (offset));      \
+        (offset) += sizeof(char);                                       \
+        break;                                                          \
+    case 'd':                                                           \
+        memcpy((outs)->ptr[(i)], (r)->data + (offset), sizeof(int));    \
+        (offset) += sizeof(int);                                        \
+        break;                                                          \
+    case 's':                                                           \
+        memcpy((outs)->ptr[(i)], (r)->data + (offset), MAX_SIZE_STR);   \
+        (offset) += MAX_SIZE_STR;                                       \
+        break;                                                          \
+    case 'f':                                                           \
+        memcpy((outs)->ptr[(i)], (r)->data + (offset), sizeof(float));  \
+        (offset) += sizeof(float);                                      \
+        break;                                                          \
+    default:                                                            \
+        UNIMPLIMENTED_TYPE(fmt);                                        \
+        exit(1);                                                        \
+        break;                                                          \
+    }                                                                   \
+}while(0)                                                   
+
 /* FREE_OUTS: frees each buffer and then the ptr array itself */
 #define FREE_OUTS(T, outs)                       \
     do {                                         \
@@ -190,8 +219,9 @@ do{                                                                             
 // these functions shall manage there own memory and "outs" as they 
 // should be already inited
 
-// this expects outs to already have data memebers inited
-void write_row_dyn(Table*t,void**outs);
+// this expects you populate a row ds during the interpritation of query 
+// with data then it writes it to a table
+void write_row_dyn(Table*t,Row*r);
 // this fills the outs ds and lets you do whatever you want with it
 void read_row_dyn(Table*t,unsigned int row_num,outs_package*outs);
 
@@ -605,37 +635,26 @@ void read_row_dyn(Table*t,unsigned int row_num,outs_package*outs){
     ASSERT(r->data != NULL,"r->data is NULL while reading dynamiclly");
    
     memcpy(r->data,src,r->size_bytes);
-
     
     // populating the outs datastructe 
     size_t offset = 0;
-    for (size_t i = 0; i < t->num_attri; i++) {
-        char fmt = t->expression[i].items[1];
-        switch (fmt) {
-        case 'c':
-            *(char*)outs->ptr[i] = *(char*)(r->data + offset);
-            offset += sizeof(char);
-            break;
-        case 'd':
-            memcpy(outs->ptr[i], r->data + offset, sizeof(int));
-            offset += sizeof(int);
-            break;
-        case 's':
-            memcpy(outs->ptr[i], r->data + offset, MAX_SIZE_STR);
-            offset += MAX_SIZE_STR;
-            break;
-        case 'f':
-            memcpy(outs->ptr[i], r->data + offset, sizeof(float));
-            offset += sizeof(float);
-            break;
-        default:
-            UNIMPLIMENTED_TYPE(fmt);
-            exit(1);
-            break;
-        }
+    for(size_t i = 0 ; i < t->num_attri ; i++){
+        POPULATE_OUTS(t,outs,r,i,offset);
     }
 
     kill_row(r);
+}
+
+
+void write_row_dyn(Table*t,Row*r){
+    if(t->count_rows >= t->TABLE_MAX_ROWS) return;
+
+    ASSERT(r->size_bytes == t->SIZE_ROW,"size_bytes != SIZE_ROWS while reading row dynamiclly");
+    
+    memcpy(row_select(t,t->count_rows),r->data,r->size_bytes);
+
+    // inc the count_rows
+    ++t->count_rows;
 }
 
 #endif

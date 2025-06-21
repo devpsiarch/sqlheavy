@@ -24,6 +24,7 @@ typedef enum {
     COMMA,
     SQUOTE,
     DQUOTE,
+    INTO,
     CHAR,
     INT,
     STRING,
@@ -114,28 +115,40 @@ arr_tokens* parser(const char*str){
                 break;
         }
         // parse string lettirals
-        if(*p == '\"'){
-            const char* start = p;
-            while(*p != '\"'){
-                p++;
-                current_col++;
-            }
-            int len = p - start - 2;
-            // we ignore and let it to the interpriter to 
-            // make sense of it
-            if(len < 0){
-                p++;
-                current_col++;
-                continue;
-            }
-            lexeme = malloc((size_t)len+1);
-            strncpy(lexeme,start+1,(size_t)len);
-            lexeme[len] = '\0';
-        
-            type = STRING;
+        if (*p == '\"') {
+            // 1) Skip the opening quote
+            size_t tok_start = current_col;
+            p++; current_col++;
 
-            toke_append(result,type,lexeme,tok_start); 
+            // 2) Mark the start of the actual text
+            const char* start = p;
+
+            // 3) Scan until the closing quote or end of input
+            while (*p && *p != '\"') {
+                p++;
+                current_col++;
+            }
+
+            // 4) Compute length, make sure it's non‑negative
+            size_t len = p - start;
+            if (len > 0) {
+                lexeme = malloc(len + 1);
+                if (lexeme) {
+                    strncpy(lexeme, start, len);
+                    lexeme[len] = '\0';
+                    type = STRING;
+                    toke_append(result, type, lexeme, tok_start);
+                }
+            }
+
+            // 5) Skip the closing quote if present
+            if (*p == '\"') {
+                p++; current_col++;
+            }
+
+            continue;
         }
+
         // parse values like numbers
         if(isdigit(*p)){
             bool is_float = false;
@@ -187,6 +200,7 @@ arr_tokens* parser(const char*str){
                 else if (strcasecmp(lexeme, "insert") == 0) type = INSERT;
                 else if (strcasecmp(lexeme, "from") == 0) type = FROM;
                 else if (strcasecmp(lexeme, "table") == 0) type = TABLE;
+                else if (strcasecmp(lexeme, "into") == 0) type = INTO;
                 else type = ID;
             
                 toke_append(result,type,lexeme,tok_start);
