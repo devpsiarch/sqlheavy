@@ -5,11 +5,11 @@
 #include <stdarg.h>
 #include <string.h>
 #include <assert.h>
+#include "pager.h"
 
 #define MAX_SIZE_STR 255    // for now i will allow only string that are 255 size in bytes.
 
-#define PAGE_SIZE 4096
-#define TABLE_MAX_PAGES 100
+
  
 
 #define UNIMPLIMENTED_TYPE(c)                                           \
@@ -31,7 +31,8 @@ typedef struct {
     unsigned int ROWS_PER_PAGE;   // tells us how many rows per page , like duh
     unsigned int TABLE_MAX_ROWS;  // self explained.
     size_t count_rows;            // tells us the current row we are int , acts like the count for da.
-    void *pages[TABLE_MAX_PAGES]; // since for now the data is stored in memory , but this is where the data will live
+    
+    Pager* pager;                 // since for now the data is stored in memory , but this is where the data will live
                                   // in the form of pages that we index and find the specific row we want 
 }Table;
 
@@ -368,9 +369,10 @@ Table* init_table(const unsigned int count,...){
     obj->TABLE_MAX_ROWS = obj->ROWS_PER_PAGE * TABLE_MAX_PAGES;
     obj->count_rows = 0;            // this missed init cost me 1h
     // init the pages for now in memory 
-    for(size_t i = 0 ; i < TABLE_MAX_PAGES ; i++){
-        obj->pages[i] = NULL;
-    }
+    // the pager takes reponsibility
+    // we read from one file for now
+    obj->pager = init_pager("db/main.db");
+    obj->count_rows = obj->pager->file_length / obj->SIZE_ROW;
 defer:
     if(result == false){
         kill_table(obj);
@@ -383,6 +385,30 @@ defer:
 void kill_table(Table *t) {
     if (t == NULL) 
         return;  // 1) guard against NULL pointer
+    // backup and store the table in a file
+    Pager* pager = t->pager;
+    size_t tot_pages = t->count_rows / t->ROWS_PER_PAGE;
+    for(size_t i = 0 ; i < tot_pages ; i++){
+        if(pager->pages[i] == NULL) continue;
+        pager_flush(pager,i,PAGE_SIZE);
+        free(pager->pages[i]);
+        pager->pages[i] = NULL;
+    }
+
+    // potential partial files , later we wont need it when we have the b-tree
+
+    size_t num_additional_rows = t->count_rows % t->ROWS_PER_PAGE;
+    if(num_additional_rows > 0){
+        unsigned int page_num = tot_pages;
+        if (pager->pages[page_num] != NULL) {
+          pager_flush(pager, page_num, num_additional_rows * t->SIZE_ROW);
+          free(pager->pages[page_num]);
+          pager->pages[page_num] = NULL;
+        } 
+    }
+    // we close the file
+    kill_pager(pager); 
+
     // 2) only loop over attributes/expression if both pointers are non-NULL
     if (t->attributes && t->expression) {
         // If attributes and expression have the same length:
@@ -396,12 +422,8 @@ void kill_table(Table *t) {
     free(t->attributes);
     free(t->expression);
 
-    // 4) free the pages is they exist
-    for(size_t i = 0 ; i < TABLE_MAX_PAGES ; i++){
-        free(t->pages[i]);
-    }
 
-    // 5) finally free the Table struct itself
+    // 4) finally free the Table struct itself
     free(t);
 }
 
@@ -542,11 +564,7 @@ void deserilize_row(const Row*src,String*expression,const unsigned int count,...
 
 void* row_select(Table* t,unsigned int row_num){
     unsigned int page_num = row_num / t->ROWS_PER_PAGE;
-    ASSERT(page_num < TABLE_MAX_PAGES,"EXCEEDED MAX PAGE COUNT");
-    void* page = t->pages[page_num];
-    if(page == NULL){
-        page = t->pages[page_num] = malloc(PAGE_SIZE);
-    }
+    void* page = get_page(t->pager,page_num); 
     unsigned int row_offset = row_num % t->ROWS_PER_PAGE;
     unsigned int bytes_offset = row_offset * t->SIZE_ROW;
     return (char*)page + bytes_offset;

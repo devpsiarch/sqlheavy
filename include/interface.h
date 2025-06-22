@@ -126,14 +126,6 @@ bool db_interactive(void){
                             "%d", "ID",
                             "%s", "Name",
                             "%f", "Balance");
-    write_row(only_table,only_table->num_attri,69,"Bjorn",12.5);
-    write_row(only_table, only_table->num_attri, 1, "Alice", 100.75);
-    write_row(only_table, only_table->num_attri, 2, "Christopher", 9999.99);
-    write_row(only_table, only_table->num_attri, 3, "Zero", 0.0);
-    write_row(only_table, only_table->num_attri, 4, "Debt", -150.25);
-    write_row(only_table, only_table->num_attri, 1000000, "Richie", 1.5e6);
-    write_row(only_table, only_table->num_attri, 5, "Floaty", 3.402823e+38f); // FLT_MAX
-    write_row(only_table, only_table->num_attri, 6, "", 12.5);
     
     bool result = true;
     String command = {
