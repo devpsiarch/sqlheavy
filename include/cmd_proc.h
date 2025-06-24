@@ -133,7 +133,14 @@ QueryResult vm_execute_query(Table*t,String*str){
                 goto defer_insert;
             }
             // we perform the job here
-            write_row_dyn(t,r);
+            // we create a abstraction cursor 
+            // for now we only insert to the end 
+            // adding an option to override or append 
+            // in the middle wont be we hard in either 
+            // btee or array implies.
+            cursor*c = init_cursor(t,END_TABLE);
+            write_row_dyn(c,r);
+            kill_cursor(c);
         }else{
             goto defer_insert;
         }

@@ -62,7 +62,6 @@ void kill_pager(Pager*p){
 void* get_page(Pager*p,unsigned int page_num){
     ASSERT(page_num < TABLE_MAX_PAGES,"EXCEEDED MAX PAGE COUNT");
     if(p->pages[page_num] == NULL){
-        printf("It is null help\n");
         // basicly cache miss. therefore load from file.
         void *page = malloc(PAGE_SIZE);
         unsigned int num_pages = p->file_length/PAGE_SIZE;

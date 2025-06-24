@@ -1,11 +1,11 @@
 #ifndef TABLE_H
 #define TABLE_H
 
-#include "tool.h"
+#include "defs.h"
+#include "cursor.h"
 #include <stdarg.h>
 #include <string.h>
 #include <assert.h>
-#include "pager.h"
 
 #define MAX_SIZE_STR 255    // for now i will allow only string that are 255 size in bytes.
 
@@ -17,24 +17,7 @@ do{                                                                     \
     fprintf(stderr,"type/attribute \"%c\" not yet implimented.\n",(c)); \
 }while(0)                       
 
-typedef struct {
-    size_t num_attri;
-    String name_of_table;         // used to identify/index the table when many exist
-    String* expression;           // this is a da of strings that experss the content of the rows in this database.
-                                  // exmaple : "%d" "%s" "%lf" the db has a (int,string,double) attributes 
-                                  // stored in memry linearly in this order. there for each row's size is 
-                                  // 4 + 8 + 8 = 20 bytes.
-    String* attributes;           // these are the names of said attributes for take the above example : 
-                                  // "ID" "Name" "Balance". 
-    unsigned int SIZE_ROW;        // its a bit redundent to have this , but since table and row stucts never really meet then 
-                                  // it does not matter much , for now this stays , if i find something better sure.
-    unsigned int ROWS_PER_PAGE;   // tells us how many rows per page , like duh
-    unsigned int TABLE_MAX_ROWS;  // self explained.
-    size_t count_rows;            // tells us the current row we are int , acts like the count for da.
-    
-    Pager* pager;                 // since for now the data is stored in memory , but this is where the data will live
-                                  // in the form of pages that we index and find the specific row we want 
-}Table;
+
 
 // let me explain how would we handle the rows in some table
 // each table has a number of rows ordered in a set of pages 
@@ -197,16 +180,16 @@ do{                                                                             
         char fmt = (T)->expression[i].items[1];                                     \
         switch(fmt){                                                                \
             case 'd':                                                               \
-                printf("%s : %d,",t->attributes[i].items,*(int*)(outs.ptr[i]));     \
+                printf("%5s : %d,",t->attributes[i].items,*(int*)(outs.ptr[i]));     \
                 break;                                                              \
             case 'f':                                                               \
-                printf("%s : %f,",t->attributes[i].items,*(float*)(outs.ptr[i]));   \
+                printf("%5s : %f,",t->attributes[i].items,*(float*)(outs.ptr[i]));   \
                 break;                                                              \
             case 'c':                                                               \
-                printf("%s : %c,",t->attributes[i].items,*(char*)(outs.ptr[i]));    \
+                printf("%5s : %c,",t->attributes[i].items,*(char*)(outs.ptr[i]));    \
                 break;                                                              \
             case 's':                                                               \
-                printf("%s : %s,",t->attributes[i].items,(char*)(outs.ptr[i]));     \
+                printf("%5s : %s,",t->attributes[i].items,(char*)(outs.ptr[i]));     \
                 break;                                                              \
             default:                                                                \
                 UNIMPLIMENTED_TYPE(fmt);                                            \
@@ -222,7 +205,10 @@ do{                                                                             
 
 // this expects you populate a row ds during the interpritation of query 
 // with data then it writes it to a table
-void write_row_dyn(Table*t,Row*r);
+
+//since we now take a cursor to a table , 
+// depending on the row supplied it will override that slot
+void write_row_dyn(cursor*c,Row*r);
 // this fills the outs ds and lets you do whatever you want with it
 void read_row_dyn(Table*t,unsigned int row_num,outs_package*outs);
 
@@ -664,15 +650,15 @@ void read_row_dyn(Table*t,unsigned int row_num,outs_package*outs){
 }
 
 
-void write_row_dyn(Table*t,Row*r){
-    if(t->count_rows >= t->TABLE_MAX_ROWS) return;
+void write_row_dyn(cursor*c,Row*r){
+    if(c->current_row >= c->t->TABLE_MAX_ROWS) return;
 
-    ASSERT(r->size_bytes == t->SIZE_ROW,"size_bytes != SIZE_ROWS while reading row dynamiclly");
+    ASSERT(r->size_bytes == c->t->SIZE_ROW,
+           "size_bytes != SIZE_ROWS while reading row dynamiclly");
     
-    memcpy(row_select(t,t->count_rows),r->data,r->size_bytes);
+    memcpy(cursor_value(c),r->data,r->size_bytes);
 
-    // inc the count_rows
-    ++t->count_rows;
+    c->t->count_rows++;
 }
 
 #endif
